@@ -261,7 +261,6 @@ void shell_loop(char *command)
 {
     char **args;
     int status;
-    //char *line;
     command = shell_redirect(command);
     args = shell_split_line(command);
     status = shell_execution(args);
@@ -272,10 +271,9 @@ void shell_loop(char *command)
     bzero(command, MAX_COMMAND);
     has_output = 0, has_input = 0, append = 0, error_append = 0;
     pipe_number = -1;
-    // for (int i = 0; i < sizeof(args) / sizeof(args[0]); i++)
-    // args[i] = 0;
+    free(args);
 
-    if (status >= 0)
+    if (status >= 0) // the exit command returns a status<0, and then the execution stops
     {
         bzero(cmd_received, sizeof(cmd_received));
         int val;
@@ -311,8 +309,8 @@ int main()
     int server;
 
     SSL_library_init();
-    ctx = InitServerCTX();                             /* initialize SSL */
-    LoadCertificates(ctx, "mycert.pem", "mycert.pem"); /* load certs */
+    ctx = InitServerCTX();                             // initialize SSL 
+    LoadCertificates(ctx, "mycert.pem", "mycert.pem"); // load certs - by default file names are both "mycert.pem"
     server = open_listener(PORT);
     struct sockaddr_in from;
     bzero(&from, sizeof(from));
@@ -327,31 +325,28 @@ int main()
         if (client < 0)
             handle_error("accept");
         pid_t pid;
-        ssl = SSL_new(ctx);      /* get new SSL state with context */
+        ssl = SSL_new(ctx);      // get new SSL state with context 
         SSL_set_fd(ssl, client); // might have to move this after fork, pls check
         if ((pid = fork()) == -1)
             handle_error("fork");
         if (pid == 0) // child process
         {
-            if (SSL_accept(ssl) == -1) /* do SSL-protocol accept */
+            if (SSL_accept(ssl) == -1) // do SSL-protocol accept
                 ERR_print_errors_fp(stderr);
             else
             {
-                //ShowCerts(ssl);
                 printf("New client connected \n");
                 while (1)
                 {
-                    if (SSL_accept(ssl) == -1) /* do SSL-protocol accept */
-                        ERR_print_errors_fp(stderr);
                     SSL_read(ssl, cmd_received, MAX_COMMAND);
                     cmd_received[sizeof(cmd_received)] = '\0';
                     shell_loop(cmd_received);
                 }
             }
             int sd;
-            sd = SSL_get_fd(ssl); /* get socket connection */
-            SSL_free(ssl);        /* release SSL state */
-            close(sd);            /* close connection */
+            sd = SSL_get_fd(ssl); // get socket connection 
+            SSL_free(ssl);        // release SSL state 
+            close(sd);            // close connection
         }
         // else
         // {

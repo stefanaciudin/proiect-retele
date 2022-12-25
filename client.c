@@ -65,7 +65,7 @@ int main()
         ERR_print_errors_fp(stderr);
     else
     {
-        ShowCerts(ssl);
+        ShowCerts(ssl); //print certificates
         while (strcmp("exit\n", command) != 0) // exit stops the execution
         {
             // current_directory();

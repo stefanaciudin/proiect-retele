@@ -9,17 +9,8 @@
 #include <fcntl.h>
 #include <wait.h>
 
-#include <resolv.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include "functions.h"
 
-#define PORT 2424
-
-#define READ 0
-#define WRITE 1
-
-#define MAX_COMMAND 2000 // max number of letters in a command
-#define MAX_ANSWER 3000
 char cmd_received[MAX_COMMAND]; // stores the command received from the client
 char cmd_answer[MAX_ANSWER];    // stores the answer
 
@@ -30,25 +21,6 @@ int size_cd;
 int pipe_number = -1; // stores the number of pipes
 int fd_input, fd_output;
 int has_input = 0, has_output = 0, append = 0, error_append = 0; // checks if the command has redirection
-
-void handle_error(char *msg)
-{
-    fprintf(stderr, "[server] error - %s\n", msg);
-    fflush(stdout);
-    if (errno)
-        perror("Reason");
-    printf("\n");
-    exit(1);
-}
-int handle_error_ret(char *msg)
-{
-    fprintf(stderr, "[server] error - %s\n", msg);
-    fflush(stdout);
-    if (errno)
-        perror("Reason");
-    printf("\n");
-    return 0;
-}
 
 int shell_exit(char **args) // returns 0 to terminate execution
 {
@@ -173,9 +145,6 @@ int shell_execution(char **args) // executes built in commands or launches syste
     return shell_launch(args);
 }
 
-#define BUFF_SIZE 1024
-#define DELIM " \n"
-
 char **shell_split_line(char *line)
 {
     int bufsize = BUFF_SIZE;
@@ -290,22 +259,21 @@ char *shell_redirect(char *line)
 
 void shell_loop(char *command)
 {
-    char *line;
     char **args;
     int status;
-
-    line = shell_redirect(command);
+    //char *line;
+    command = shell_redirect(command);
     args = shell_split_line(command);
     status = shell_execution(args);
 
     SSL_write(ssl, cmd_answer, sizeof(cmd_answer));
     bzero(cmd_answer, sizeof(cmd_answer));
     bzero(cmd_received, sizeof(cmd_received));
-    bzero(command, sizeof(command));
+    bzero(command, MAX_COMMAND);
     has_output = 0, has_input = 0, append = 0, error_append = 0;
     pipe_number = -1;
-    for (int i = 0; i < sizeof(args) / sizeof(args[0]); i++)
-        args[i] = 0;
+    // for (int i = 0; i < sizeof(args) / sizeof(args[0]); i++)
+    // args[i] = 0;
 
     if (status >= 0)
     {
@@ -336,61 +304,6 @@ int open_listener(int port)
         handle_error("listen");
     return sd;
 }
-SSL_CTX *InitServerCTX(void)
-{
-    SSL_METHOD *method;
-    SSL_CTX *ctx;
-    OpenSSL_add_all_algorithms();     /* load & register all cryptos, etc. */
-    SSL_load_error_strings();         /* load all error messages */
-    method = TLSv1_2_server_method(); /* create new server-method instance */
-    ctx = SSL_CTX_new(method);        /* create new context from method */
-    if (ctx == NULL)
-    {
-        ERR_print_errors_fp(stderr);
-        abort();
-    }
-    return ctx;
-}
-void LoadCertificates(SSL_CTX *ctx, char *CertFile, char *KeyFile)
-{
-    /* set the local certificate from CertFile */
-    if (SSL_CTX_use_certificate_file(ctx, CertFile, SSL_FILETYPE_PEM) <= 0)
-    {
-        ERR_print_errors_fp(stderr);
-        abort();
-    }
-    /* set the private key from KeyFile (may be the same as CertFile) */
-    if (SSL_CTX_use_PrivateKey_file(ctx, KeyFile, SSL_FILETYPE_PEM) <= 0)
-    {
-        ERR_print_errors_fp(stderr);
-        abort();
-    }
-    /* verify private key */
-    if (!SSL_CTX_check_private_key(ctx))
-    {
-        fprintf(stderr, "Private key does not match the public certificate\n");
-        abort();
-    }
-}
-void ShowCerts(SSL *ssl)
-{
-    X509 *cert;
-    char *line;
-    cert = SSL_get_peer_certificate(ssl); /* Get certificates (if available) */
-    if (cert != NULL)
-    {
-        printf("Server certificates:\n");
-        line = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
-        printf("Subject: %s\n", line);
-        free(line);
-        line = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
-        printf("Issuer: %s\n", line);
-        free(line);
-        X509_free(cert);
-    }
-    else
-        printf("No certificates.\n");
-}
 
 int main()
 {
@@ -409,8 +322,7 @@ int main()
     while (run)
     {
 
-        int length = sizeof(from);
-
+        socklen_t length = sizeof(from);
         client = accept(server, (struct sockaddr *)&from, &length);
         if (client < 0)
             handle_error("accept");
@@ -425,7 +337,7 @@ int main()
                 ERR_print_errors_fp(stderr);
             else
             {
-                ShowCerts(ssl);
+                //ShowCerts(ssl);
                 printf("New client connected \n");
                 while (1)
                 {

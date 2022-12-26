@@ -24,11 +24,6 @@ int shell_exit() // returns -1 to terminate execution
     return -1;
 }
 
-int shell_help()
-{
-    strcat(cmd_answer, "For help info on commands, use the man command \n"); // printf -- client
-    return 1;
-}
 
 void current_directory()
 {

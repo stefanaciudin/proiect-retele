@@ -10,6 +10,7 @@
 #include <wait.h>
 
 #include "functions.h"
+#include "errors.h"
 
 char cmd_received[MAX_COMMAND]; // stores the command received from the client
 char cmd_answer[MAX_ANSWER];    // stores the answer
@@ -94,13 +95,12 @@ int shell_execution(char **args) // executes built in commands or launches syste
 {
     if (args[0] == NULL) // empty command
         return 1;
-    int nr_commands = 3;
+    int nr_commands = 2;
     char *command_list[nr_commands];
     int val;
 
-    command_list[0] = "help";
-    command_list[1] = "cd";
-    command_list[2] = "exit";
+    command_list[0] = "cd";
+    command_list[1] = "exit";
     for (int i = 0; i < nr_commands; i++)
     {
         if (strcmp(args[0], command_list[i]) == 0) // searching the command in the list
@@ -112,10 +112,8 @@ int shell_execution(char **args) // executes built in commands or launches syste
     switch (val)
     {
     case 1:
-        return shell_help();
-    case 2:
         return shell_cd(args);
-    case 3:
+    case 2:
         return shell_exit();
     default:
         break;
@@ -145,11 +143,16 @@ void shell_loop()
 {
     char **args;
     int status;
-    if (strstr(cmd_received, "cd") != NULL) //also login :)
-        {
-            args = shell_split_line(cmd_received);
-            status=shell_execution(args);
-        }
+    if (strstr(cmd_received, "cd") != NULL) // also login :)
+    {
+        args = shell_split_line(cmd_received);
+        status = shell_execution(args);
+    }
+    else if (strstr(cmd_received, "exit") != NULL)
+    {
+        args = shell_split_line(cmd_received);
+        status = shell_execution(args);
+    }
     else
         status = shell_launch(cmd_received);
     SSL_write(ssl, cmd_answer, sizeof(cmd_answer));

@@ -14,6 +14,7 @@
 #include <openssl/err.h>
 
 #include "functions.h"
+#include "errors.h"
 
 #define PORT 2424
 #define MAX_COMMAND 2000
@@ -65,11 +66,9 @@ int main()
         ERR_print_errors_fp(stderr);
     else
     {
-        ShowCerts(ssl); //print certificates
+        ShowCerts(ssl);                        // print certificates
         while (strcmp("exit\n", command) != 0) // exit stops the execution
         {
-            // current_directory();
-            // printf(">>");
             n = read(0, command, MAX_COMMAND); // reading the command
             command[n] = '\0';
             SSL_write(ssl, command, n); // writing the command in the socket descriptor
@@ -80,7 +79,7 @@ int main()
         }
     }
     SSL_free(ssl);
-    if(close(server)==-1)
+    if (close(server) == -1)
         perror("[client] error - close");
     SSL_CTX_free(ctx);
 }

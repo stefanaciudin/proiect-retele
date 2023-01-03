@@ -3,16 +3,15 @@
 #include <stdlib.h>
 #include "errors.h"
 
-void handle_error_soft(const char *msg) //used in client
+void handle_error(const char *msg) // used in client
 {
     fprintf(stderr, "[client]: %s. ", msg);
     fflush(stdout);
     if (errno != 0)
         perror("Reason");
-    else
-        printf("\n");
+    printf("\n");
 }
-void handle_error(char *msg)
+void handle_error_exit(char *msg)
 {
     fprintf(stderr, "[server] error - %s\n", msg);
     fflush(stdout);
@@ -30,4 +29,3 @@ int handle_error_ret(char *msg)
     printf("\n");
     return 0;
 }
-

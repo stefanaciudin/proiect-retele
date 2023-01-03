@@ -14,7 +14,8 @@
                 "${fileDirname}/errors.c",
                 "-L/usr/lib",
                 "-lssl",
-                "-lcrypto"
+                "-lcrypto",
+                "-lsqlite3"
             ],
             "options": {
                 "cwd": "${fileDirname}"

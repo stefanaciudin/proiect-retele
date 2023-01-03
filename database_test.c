@@ -13,90 +13,116 @@
 sqlite3 *db;
 char *zErrMsg;
 int dbproject;
-void create_account(char *user, char *pass)
+
+int create_account(char *username, char *password)
 {
-
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
     int rc;
-    sqlite3_stmt *stmt1;
-    sqlite3_prepare_v2(db, "SELECT username, password FROM users WHERE username = ?1;", -1, &stmt1, NULL);
-    sqlite3_bind_text(stmt1, 1, user, -1, SQLITE_STATIC);
 
-    if ((rc = sqlite3_step(stmt1)) == SQLITE_ROW)
+    rc = sqlite3_open("projectdb.db", &db);
+    if (rc)
     {
-        printf("Acest utilizator exista deja!\n");
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    rc = sqlite3_prepare_v2(db, "INSERT INTO users (username, password) VALUES (?, ?)", -1, &stmt, 0);
+    if (rc)
+    {
+        fprintf(stderr, "Can't prepare INSERT statement: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    rc = sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
+    if (rc)
+    {
+        fprintf(stderr, "Can't bind username: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    rc = sqlite3_bind_text(stmt, 2, password, -1, SQLITE_STATIC);
+    if (rc)
+    {
+        fprintf(stderr, "Can't bind password: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE)
+    {
+        fprintf(stderr, "Error inserting row: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return 1;
+}
+
+int login(char *username, char *password)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+
+    rc = sqlite3_prepare_v2(db, "SELECT password FROM users WHERE username = ?", -1, &stmt, 0);
+    if (rc)
+    {
+        fprintf(stderr, "Can't prepare SELECT statement: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    rc = sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
+    if (rc)
+    {
+        fprintf(stderr, "Can't bind username: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW)
+    {
+        char *stored_password = (char *)sqlite3_column_text(stmt, 0);
+        if (strcmp(password, stored_password) == 0)
+        {
+            sqlite3_finalize(stmt);
+            sqlite3_close(db);
+            return 1;
+        }
+    }
+    else if (rc == SQLITE_DONE)
+    {
+        printf("The username does not exist. Create a new account? [y/n]\n");
+        char ans[3];
+        scanf("%s", ans);
+        ans[sizeof(ans)] = '\0';
+        if (strcmp(ans, "y") == 0)
+        {
+            if (create_account(username, password))
+            {
+                printf("Account created successfully.\n");
+                return 1;
+            }
+            else
+            {
+                fprintf(stderr, "Error creating account.\n");
+                return 0;
+            }
+        }
     }
     else
     {
-        printf("Username: %s, Password: %s", user, pass);
-        sqlite3_stmt *stmt2;
-        sqlite3_prepare_v2(db, "INSERT INTO USERS VALUES(?1, ?2);", -1, &stmt2, NULL);
-        sqlite3_bind_text(stmt2, 1, user, -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt2, 2, pass, -1, SQLITE_STATIC);
-        sqlite3_step(stmt2);
-
-        printf("Utilizator creat cu succes.\n");
-    }
-}
-
-void login(char *user, char *pass)
-{
-
-    sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(db, "SELECT username, password FROM users WHERE username = ?1;", -1, &stmt, NULL);
-    sqlite3_bind_text(stmt, 1, user, -1, SQLITE_STATIC);
-
-    int was_made = 0;
-    int rc;
-    int ok = 0;
-    const char *right_pass;
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
-    {
-        const char *value = sqlite3_column_text(stmt, 0);
-        right_pass = sqlite3_column_text(stmt, 1);
-        if (strcmp(value, user) == 0)
-        {
-            ok = 1;
-            break;
-        }
+        fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
+        return 0;
     }
 
-    if (!ok)
-    {
-        printf("Nu exista cont cu acest user\n");
-
-        printf("username inexistent -- create new account? y/n\n");
-        char ans[3];
-        scanf("%s", ans);
-
-        if (strcmp(ans, "y") == 0)
-        {
-            create_account(user, pass);
-            was_made++;
-        }
-    }
-    {
-        int verif = 0;
-        if (strcmp(right_pass, pass) == 0)
-            verif++;
-        if (verif)
-        {
-            printf("Te ai conectat cu succes\n");
-        }
-        else if(!was_made)
-            printf("Wrong pass\n");
-    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return 0;
 }
 
 int main()
 {
-    char username[20], password[30];
-
-    read(0, username, 20);
-    username[sizeof(username) - 1] = '\0';
-
-    read(0, password, 30);
-    password[sizeof(password) - 1] = '\0';
-
     dbproject = sqlite3_open("projectdb.db", &db);
     if (dbproject != SQLITE_OK)
     {
@@ -112,5 +138,18 @@ int main()
     // execute
     dbproject = sqlite3_exec(db, sql1, NULL, 0, &zErrMsg);
 
-    login(username, password);
+    while (1)
+    {
+        char username[20], password[30];
+
+        read(0, username, 20);
+        username[sizeof(username) - 1] = '\0';
+
+        read(0, password, 30);
+        password[sizeof(password) - 1] = '\0';
+        if (login(username, password))
+            printf("Login successful\n");
+        else
+            printf("Login unsuccessful\n");
+    }
 }

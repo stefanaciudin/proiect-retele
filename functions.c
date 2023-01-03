@@ -36,12 +36,12 @@ void ShowCerts(SSL *ssl) // used in client
     {
         printf("Server certificates:\n");
         if ((line = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0)) == NULL)
-            handle_error_soft("unable to get subject name of certificate");
+            handle_error("unable to get subject name of certificate");
         else
             printf("Subject: %s\n", line);
         free(line);
         if ((line = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0)) == NULL)
-            handle_error_soft("unable to get issuer name of certificate");
+            handle_error("unable to get issuer name of certificate");
         else
             printf("Issuer: %s\n", line);
         free(line);

@@ -17,8 +17,6 @@
 #include "errors.h"
 
 #define PORT 2424
-#define MAX_COMMAND 2000
-#define MAX_ANSWER 3000
 
 int create_connection()
 {
@@ -29,7 +27,7 @@ int create_connection()
     if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
         perror("[client] error - socket \n");
-        return 1;
+        exit(1);
     }
 
     bzero(&server, sizeof(server));
@@ -42,7 +40,7 @@ int create_connection()
         if (close(sd) == -1)
             perror("[client] error - close");
         perror("[client] error - connect \n");
-        return 1;
+        exit(1);
     }
     return sd;
 }
@@ -66,7 +64,7 @@ int main()
         ERR_print_errors_fp(stderr);
     else
     {
-        ShowCerts(ssl);                        // print certificates
+        //ShowCerts(ssl);                        // print certificates
         while (strcmp("exit\n", command) != 0) // exit stops the execution
         {
             n = read(0, command, MAX_COMMAND); // reading the command

@@ -5,7 +5,7 @@
 
 void handle_error(const char *msg) // used in client
 {
-    fprintf(stderr, "[client]: %s. ", msg);
+    fprintf(stderr, "error: %s. ", msg);
     fflush(stdout);
     if (errno != 0)
         perror("Reason");

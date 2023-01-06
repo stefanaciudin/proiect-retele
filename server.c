@@ -14,7 +14,6 @@
 #include "functions.h"
 #include "errors.h"
 
-sqlite3 *db;
 char *zErrMsg;
 int dbproject;
 
@@ -43,15 +42,15 @@ int shell_cd(char **args) // implementation of cd
     if (args[1] == NULL)
     {
         strcat(cmd_answer, "error - missing argument (cd)\n"); // printf -- client
-        handle_error_ret("missing argument - cd \n");
+        handle_error("missing argument - cd \n");
     }
     else
     {
 
         if (chdir(args[1]) != 0)
         {
-            strcat(cmd_answer, "error - cd\n"); // printf -- client
-            handle_error_ret("cd \n");
+            strcat(cmd_answer, "error - the directory doesn't exist (cd)\n"); // printf -- client
+            handle_error("cd \n");
         }
         current_directory();
     }
@@ -65,23 +64,38 @@ int create_account(char *username, char *password)
 
     rc = sqlite3_open("projectdb.db", &db);
     if (rc)
-        handle_error_ret("can't open database");
+    {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
 
     rc = sqlite3_prepare_v2(db, "INSERT INTO users (username, password) VALUES (?, ?)", -1, &stmt, 0);
     if (rc)
-        handle_error_ret("can't prepare INSERT statement");
+    {
+        fprintf(stderr, "Can't prepare INSERT statement: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
 
     rc = sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
     if (rc)
-        handle_error_ret("can't bind username");
+    {
+        fprintf(stderr, "Can't bind username: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
 
     rc = sqlite3_bind_text(stmt, 2, password, -1, SQLITE_STATIC);
     if (rc)
-        handle_error_ret("can't bind password");
+    {
+        fprintf(stderr, "Can't bind password: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
 
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_DONE)
-        handle_error_ret("error inserting row");
+    {
+        fprintf(stderr, "Error inserting row: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
 
     sqlite3_finalize(stmt);
     sqlite3_close(db);
@@ -91,20 +105,30 @@ int create_account(char *username, char *password)
 int shell_login()
 {
     char username[30], password[40];
+    bzero(username, 30);
+    bzero(password, 40);
+    sqlite3 *db;
     SSL_write(ssl, "Username: ", 11);
     SSL_read(ssl, username, 30);
     SSL_write(ssl, "Password: ", 11);
     SSL_read(ssl, password, 40);
     sqlite3_stmt *stmt;
     int rc;
+    rc = sqlite3_open("projectdb.db", &db);
 
     rc = sqlite3_prepare_v2(db, "SELECT password FROM users WHERE username = ?", -1, &stmt, 0);
     if (rc)
-        handle_error_ret("can't prepare SELECT statement");
+    {
+        fprintf(stderr, "Can't prepare SELECT statement: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
+        return 0;
+    }
 
     rc = sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
     if (rc)
-        handle_error_ret("can't bind username");
+    {
+        fprintf(stderr, "Can't bind username: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
 
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW)
@@ -122,22 +146,35 @@ int shell_login()
         SSL_write(ssl, "The username does not exist. Create a new account? [y/n]", 57);
         char ans[3];
         SSL_read(ssl, ans, 3);
-        ans[sizeof(ans)] = '\0';
-        printf("%s",ans);
+        // ans[sizeof(ans)] = '\0'
         if (strcmp(ans, "y\n") == 0)
         {
+            printf("Username %s", username);
             if (create_account(username, password))
             {
                 printf("Account created successfully.\n");
                 return 1;
             }
             else
-                handle_error_ret("creating the new account");
+            {
+                fprintf(stderr, "Error creating account.\n");
+                return 0;
+            }
+        }
+        else
+        {
+            fprintf(stderr, "Error creating account.\n");
+            return 0;
         }
     }
     else
-        handle_error_ret("execution of the SELECT statement");
+    {
+        fprintf(stderr, "execution of the SELECT statement");
+        return 0;
+    }
 
+    bzero(username, 30);
+    bzero(password, 40);
     sqlite3_finalize(stmt);
     sqlite3_close(db);
     return 0;
@@ -294,6 +331,7 @@ int main()
 {
     SSL_CTX *ctx;
     int server;
+    sqlite3 *db;
 
     dbproject = sqlite3_open("projectdb.db", &db);
     if (dbproject != SQLITE_OK)
@@ -323,7 +361,7 @@ int main()
         if (client < 0)
             handle_error_exit("accept");
         pid_t pid;
-        ssl = SSL_new(ctx);      // get new SSL state with context
+        ssl = SSL_new(ctx); // get new SSL state with context
         SSL_set_fd(ssl, client);
         if ((pid = fork()) == -1)
             handle_error_exit("fork");

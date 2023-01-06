@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <sqlite3.h>
 
+
 sqlite3 *db;
 char *zErrMsg;
 int dbproject;
@@ -103,11 +104,7 @@ int login(char *username, char *password)
                 printf("Account created successfully.\n");
                 return 1;
             }
-            else
-            {
-                fprintf(stderr, "Error creating account.\n");
-                return 0;
-            }
+         
         }
     }
     else

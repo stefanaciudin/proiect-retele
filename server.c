@@ -8,8 +8,11 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <wait.h>
+#include <time.h>
 
 #include <sqlite3.h>
+
+#include <crypt.h>
 
 #include "functions.h"
 #include "errors.h"
@@ -56,11 +59,15 @@ int shell_cd(char **args) // implementation of cd
     }
     return 1;
 }
+
 int create_account(char *username, char *password)
 {
     sqlite3 *db;
     sqlite3_stmt *stmt;
     int rc;
+
+    char *salt = generate_salt();
+    char *hash = crypt(password, salt);
 
     rc = sqlite3_open("projectdb.db", &db);
     if (rc)
@@ -69,7 +76,7 @@ int create_account(char *username, char *password)
         return 0;
     }
 
-    rc = sqlite3_prepare_v2(db, "INSERT INTO users (username, password) VALUES (?, ?)", -1, &stmt, 0);
+    rc = sqlite3_prepare_v2(db, "INSERT INTO users (username, password, salt) VALUES (?, ?, ?)", -1, &stmt, 0);
     if (rc)
     {
         fprintf(stderr, "Can't prepare INSERT statement: %s\n", sqlite3_errmsg(db));
@@ -83,10 +90,17 @@ int create_account(char *username, char *password)
         return 0;
     }
 
-    rc = sqlite3_bind_text(stmt, 2, password, -1, SQLITE_STATIC);
+    rc = sqlite3_bind_text(stmt, 2, hash, -1, SQLITE_STATIC);
     if (rc)
     {
         fprintf(stderr, "Can't bind password: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    rc = sqlite3_bind_text(stmt, 3, salt, -1, SQLITE_STATIC);
+    if (rc)
+    {
+        fprintf(stderr, "Can't bind salt: %s\n", sqlite3_errmsg(db));
         return 0;
     }
 
@@ -116,7 +130,7 @@ int shell_login()
     int rc;
     rc = sqlite3_open("projectdb.db", &db);
 
-    rc = sqlite3_prepare_v2(db, "SELECT password FROM users WHERE username = ?", -1, &stmt, 0);
+    rc = sqlite3_prepare_v2(db, "SELECT password,salt FROM users WHERE username = ?", -1, &stmt, 0);
     if (rc)
     {
         fprintf(stderr, "Can't prepare SELECT statement: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
@@ -133,8 +147,10 @@ int shell_login()
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW)
     {
-        char *stored_password = (char *)sqlite3_column_text(stmt, 0);
-        if (strcmp(password, stored_password) == 0)
+        char *stored_hash = (char *)sqlite3_column_text(stmt, 0);
+        char *salt = (char *)sqlite3_column_text(stmt, 1);
+        char *inputted_hash = crypt(password, salt);
+        if (strcmp(inputted_hash, stored_hash) == 0)
         {
             sqlite3_finalize(stmt);
             sqlite3_close(db);
@@ -185,11 +201,11 @@ int shell_launch(char *command) // executes system commands
     int status;
     int pipe_output[2];
     if ((pipe(pipe_output)) == -1)
-        handle_error_exit("pipe");
+        handle_error_exit("[server] - pipe");
 
     pid_t pid = fork();
     if (pid == -1)
-        handle_error_exit("fork");
+        handle_error_exit("[server] - fork");
 
     if (pid == 0)
     {
@@ -199,7 +215,7 @@ int shell_launch(char *command) // executes system commands
         dup2(pipe_output[WRITE], STDOUT_FILENO);
 
         if (execl("/bin/bash", "/bin/bash", "-c", command, (char *)NULL) == -1)
-            handle_error_exit("exec error");
+            handle_error_exit("[server] - exec error");
         exit(10);
     }
     else
@@ -261,7 +277,7 @@ char **shell_split_line(char *line)
     char **args = malloc(BUFF_SIZE * sizeof(char *));
     char *p;
     if (!args)
-        handle_error_exit("allocation in split_line");
+        handle_error_exit("[server] - allocation in split_line");
     p = strtok(line, DELIM);
     while (p != NULL)
     {
@@ -313,7 +329,7 @@ int open_listener(int port)
     int sd; // socket descriptor
 
     if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-        handle_error_exit("socket");
+        handle_error_exit("[server] - socket");
 
     bzero(&server, sizeof(server));
 
@@ -321,9 +337,9 @@ int open_listener(int port)
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons(PORT);
     if (bind(sd, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
-        handle_error_exit("bind");
+        handle_error_exit("[server] - bind");
     if (listen(sd, 5) == -1)
-        handle_error_exit("listen");
+        handle_error_exit("[server] - listen");
     return sd;
 }
 
@@ -335,12 +351,16 @@ int main()
 
     dbproject = sqlite3_open("projectdb.db", &db);
     if (dbproject != SQLITE_OK)
-        handle_error_ret("database");
+    {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
 
     char *sql1; // table creation
     sql1 = "CREATE TABLE USERS("
            "USERNAME TEXT PRIMARY KEY NOT NULL, "
-           "PASSWORD TEXT             NOT NULL);";
+           "PASSWORD TEXT             NOT NULL, "
+           "SALT     TEXT             NOT NULL);";
     // execute
     dbproject = sqlite3_exec(db, sql1, NULL, 0, &zErrMsg);
 
@@ -359,12 +379,12 @@ int main()
         socklen_t length = sizeof(from);
         client = accept(server, (struct sockaddr *)&from, &length);
         if (client < 0)
-            handle_error_exit("accept");
+            handle_error_exit("[server] - accept");
         pid_t pid;
         ssl = SSL_new(ctx); // get new SSL state with context
         SSL_set_fd(ssl, client);
         if ((pid = fork()) == -1)
-            handle_error_exit("fork");
+            handle_error_exit("[server] - fork");
         if (pid == 0) // child process
         {
             if (SSL_accept(ssl) == -1) // do SSL-protocol accept
@@ -384,14 +404,6 @@ int main()
             SSL_free(ssl);        // release SSL state
             close(sd);            // close connection
         }
-        // else
-        // {
-        //     close(child_to_parent[WRITE]);
-        //     char info[3000];
-        //     int n = read(child_to_parent[READ], info, 1000);
-        //     info[n] = '\0';
-        //     write(client, info, strlen(info));
-        // }
     }
     close(client);
 }

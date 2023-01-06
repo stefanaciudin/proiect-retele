@@ -8,6 +8,31 @@
 
 #include "functions.h"
 
+char *generate_salt()
+{
+    char *salt = malloc(SALT_LENGTH + 1);
+    if (salt == NULL)
+    {
+        perror("malloc");
+        return NULL;
+    }
+
+    srand(time(NULL));
+    salt[0] = '$';
+    salt[1] = '5';
+    salt[2] = '$';
+    for (int i = 3; i < SALT_LENGTH - 2; i++)
+    {
+        // generate a random number
+        salt[i] = 48 + rand() % 10;
+    }
+    salt[SALT_LENGTH - 2] = '/';
+    salt[SALT_LENGTH - 1] = '$';
+    salt[SALT_LENGTH] = '\0';
+
+    return salt;
+}
+
 void LoadCertificates(SSL_CTX *ctx, char *CertFile, char *KeyFile)
 {
 

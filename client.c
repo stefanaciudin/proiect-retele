@@ -25,11 +25,7 @@ int create_connection()
     char address[] = "127.0.0.1";
 
     if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-    {
-        perror("[client] error - socket \n");
-        exit(1);
-    }
-
+        handle_error_exit("[client] - socket");
     bzero(&server, sizeof(server));
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(address);
@@ -39,8 +35,7 @@ int create_connection()
     {
         if (close(sd) == -1)
             perror("[client] error - close");
-        perror("[client] error - connect \n");
-        exit(1);
+        handle_error_exit("[client] - connect");
     }
     return sd;
 }
@@ -64,7 +59,7 @@ int main()
         ERR_print_errors_fp(stderr);
     else
     {
-        //ShowCerts(ssl);                        // print certificates
+        // ShowCerts(ssl);                        // print certificates
         while (strcmp("exit\n", command) != 0) // exit stops the execution
         {
             n = read(0, command, MAX_COMMAND); // reading the command

@@ -13,7 +13,7 @@ void handle_error(const char *msg) // used in client
 }
 void handle_error_exit(char *msg)
 {
-    fprintf(stderr, "[server] error - %s\n", msg);
+    fprintf(stderr, "error - %s\n", msg);
     fflush(stdout);
     if (errno)
         perror("Reason");

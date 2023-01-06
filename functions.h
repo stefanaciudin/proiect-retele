@@ -17,6 +17,9 @@
 #define BUFF_SIZE 1024
 #define DELIM " \n"
 
+#define SALT_LENGTH 20
+
+char* generate_salt(); //generates salt for crypt() in server
 SSL_CTX *InitServerCTX(void);
 void LoadCertificates(SSL_CTX *ctx, char *CertFile, char *KeyFile);
 void ShowCerts(SSL *ssl);

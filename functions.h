@@ -12,14 +12,14 @@
 #define WRITE 1
 
 #define MAX_COMMAND 2000 // max number of letters in a command
-#define MAX_ANSWER 3000 //max number of letters in answer
+#define MAX_ANSWER 3000  // max number of letters in answer
 
 #define BUFF_SIZE 1024
 #define DELIM " \n"
 
 #define SALT_LENGTH 20
 
-char* generate_salt(); //generates salt for crypt() in server
+char *generate_salt(); // generates salt for crypt() in server
 SSL_CTX *InitServerCTX(void);
 void LoadCertificates(SSL_CTX *ctx, char *CertFile, char *KeyFile);
 void ShowCerts(SSL *ssl);

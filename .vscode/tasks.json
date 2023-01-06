@@ -12,10 +12,12 @@
                 "${fileDirname}/${fileBasenameNoExtension}",
                 "${fileDirname}/functions.c",
                 "${fileDirname}/errors.c",
+                "${fileDirname}/database_functions.c",
                 "-L/usr/lib",
                 "-lssl",
                 "-lcrypto",
-                "-lsqlite3"
+                "-lsqlite3",
+                "-lcrypt"
             ],
             "options": {
                 "cwd": "${fileDirname}"

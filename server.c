@@ -15,6 +15,7 @@
 #include <crypt.h>
 
 #include "functions.h"
+#include "database_functions.h"
 #include "errors.h"
 
 char *zErrMsg;
@@ -31,6 +32,21 @@ int shell_exit() // returns -1 to terminate execution
     printf("Client disconnected\n");
     return -1;
 }
+int shell_logout()
+{
+    int check = get_logged_status();
+    if (!check)
+        strcat(cmd_answer, "Not logged in");
+    if (check)
+    {
+        int ok;
+        ok = update_logged_status();
+        if (ok)
+            strcat(cmd_answer, "User logged out");
+        return 1;
+    }
+    return 0;
+}
 
 void current_directory()
 {
@@ -42,134 +58,106 @@ void current_directory()
 
 int shell_cd(char **args) // implementation of cd
 {
-    if (args[1] == NULL)
+    // login - cd - other command ?????
+    int check = get_logged_status(); // here
+    if (check)
     {
-        strcat(cmd_answer, "error - missing argument (cd)\n"); // printf -- client
-        handle_error("missing argument - cd \n");
+        if (args[1] == NULL)
+        {
+            strcat(cmd_answer, "error - missing argument (cd)\n"); // printf -- client
+            handle_error("missing argument - cd \n");
+        }
+        else
+        {
+
+            if (chdir(args[1]) != 0)
+            {
+                strcat(cmd_answer, "error - the directory doesn't exist (cd)\n"); // printf -- client
+                handle_error("cd \n");
+            }
+            current_directory();
+        }
+        return 1;
     }
     else
     {
-
-        if (chdir(args[1]) != 0)
-        {
-            strcat(cmd_answer, "error - the directory doesn't exist (cd)\n"); // printf -- client
-            handle_error("cd \n");
-        }
-        current_directory();
-    }
-    return 1;
-}
-
-int create_account(char *username, char *password)
-{
-    sqlite3 *db;
-    sqlite3_stmt *stmt;
-    int rc;
-
-    char *salt = generate_salt();
-    char *hash = crypt(password, salt);
-
-    rc = sqlite3_open("projectdb.db", &db);
-    if (rc)
-    {
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        SSL_write(ssl, "Not logged in - please login first", 35);
         return 0;
     }
-
-    rc = sqlite3_prepare_v2(db, "INSERT INTO users (username, password, salt) VALUES (?, ?, ?)", -1, &stmt, 0);
-    if (rc)
-    {
-        fprintf(stderr, "Can't prepare INSERT statement: %s\n", sqlite3_errmsg(db));
-        return 0;
-    }
-
-    rc = sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
-    if (rc)
-    {
-        fprintf(stderr, "Can't bind username: %s\n", sqlite3_errmsg(db));
-        return 0;
-    }
-
-    rc = sqlite3_bind_text(stmt, 2, hash, -1, SQLITE_STATIC);
-    if (rc)
-    {
-        fprintf(stderr, "Can't bind password: %s\n", sqlite3_errmsg(db));
-        return 0;
-    }
-
-    rc = sqlite3_bind_text(stmt, 3, salt, -1, SQLITE_STATIC);
-    if (rc)
-    {
-        fprintf(stderr, "Can't bind salt: %s\n", sqlite3_errmsg(db));
-        return 0;
-    }
-
-    rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE)
-    {
-        fprintf(stderr, "Error inserting row: %s\n", sqlite3_errmsg(db));
-        return 0;
-    }
-
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
-    return 1;
 }
 
 int shell_login()
 {
-    char username[30], password[40];
-    bzero(username, 30);
-    bzero(password, 40);
-    sqlite3 *db;
-    SSL_write(ssl, "Username: ", 11);
-    SSL_read(ssl, username, 30);
-    SSL_write(ssl, "Password: ", 11);
-    SSL_read(ssl, password, 40);
-    sqlite3_stmt *stmt;
-    int rc;
-    rc = sqlite3_open("projectdb.db", &db);
-
-    rc = sqlite3_prepare_v2(db, "SELECT password,salt FROM users WHERE username = ?", -1, &stmt, 0);
-    if (rc)
+    int check = get_logged_status();
+    if (check)
     {
-        fprintf(stderr, "Can't prepare SELECT statement: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
+        strcat(cmd_answer, "Someone is already logged in - please logout first!\n");
         return 0;
     }
-
-    rc = sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
-    if (rc)
+    else
     {
-        fprintf(stderr, "Can't bind username: %s\n", sqlite3_errmsg(db));
-        return 0;
-    }
+        char username[30], password[40];
+        bzero(username, 30);
+        bzero(password, 40);
+        sqlite3 *db;
+        SSL_write(ssl, "Username: ", 11);
+        SSL_read(ssl, username, 30);
+        SSL_write(ssl, "Password: ", 11);
+        SSL_read(ssl, password, 40);
+        sqlite3_stmt *stmt;
+        int rc;
+        rc = sqlite3_open("projectdb.db", &db);
 
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW)
-    {
-        char *stored_hash = (char *)sqlite3_column_text(stmt, 0);
-        char *salt = (char *)sqlite3_column_text(stmt, 1);
-        char *inputted_hash = crypt(password, salt);
-        if (strcmp(inputted_hash, stored_hash) == 0)
+        rc = sqlite3_prepare_v2(db, "SELECT password,salt FROM users WHERE username = ?", -1, &stmt, 0);
+        if (rc)
         {
-            sqlite3_finalize(stmt);
-            sqlite3_close(db);
-            return 1;
+            fprintf(stderr, "Can't prepare SELECT statement: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
+            return 0;
         }
-    }
-    else if (rc == SQLITE_DONE)
-    {
-        SSL_write(ssl, "The username does not exist. Create a new account? [y/n]", 57);
-        char ans[3];
-        SSL_read(ssl, ans, 3);
-        // ans[sizeof(ans)] = '\0'
-        if (strcmp(ans, "y\n") == 0)
+
+        rc = sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
+        if (rc)
         {
-            printf("Username %s", username);
-            if (create_account(username, password))
+            fprintf(stderr, "Can't bind username: %s\n", sqlite3_errmsg(db));
+            return 0;
+        }
+
+        rc = sqlite3_step(stmt);
+        if (rc == SQLITE_ROW)
+        {
+            char *stored_hash = (char *)sqlite3_column_text(stmt, 0);
+            char *salt = (char *)sqlite3_column_text(stmt, 1);
+            char *inputted_hash = crypt(password, salt);
+            if (strcmp(inputted_hash, stored_hash) == 0)
             {
-                printf("Account created successfully.\n");
+
+                sqlite3_finalize(stmt);
+                sqlite3_close(db);
+                update_logged_status(); // the user is logged in
                 return 1;
+            }
+        }
+        else if (rc == SQLITE_DONE)
+        {
+            SSL_write(ssl, "The username does not exist. Create a new account? [y/n]", 57);
+            char ans[3];
+            SSL_read(ssl, ans, 3);
+            if (strcmp(ans, "y\n") == 0)
+            {
+                printf("Username %s", username);
+                if (create_account(username, password))
+                {
+                    sqlite3_finalize(stmt);
+                    sqlite3_close(db);
+                    update_logged_status(); // the user is logged in
+                    printf("Account created successfully.\n");
+                    return 1;
+                }
+                else
+                {
+                    fprintf(stderr, "Error creating account.\n");
+                    return 0;
+                }
             }
             else
             {
@@ -179,67 +167,72 @@ int shell_login()
         }
         else
         {
-            fprintf(stderr, "Error creating account.\n");
+            fprintf(stderr, "execution of the SELECT statement");
             return 0;
         }
-    }
-    else
-    {
-        fprintf(stderr, "execution of the SELECT statement");
+
+        bzero(username, 30);
+        bzero(password, 40);
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
         return 0;
     }
-
-    bzero(username, 30);
-    bzero(password, 40);
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
-    return 0;
 }
 
 int shell_launch(char *command) // executes system commands
 {
-    int status;
-    int pipe_output[2];
-    if ((pipe(pipe_output)) == -1)
-        handle_error_exit("[server] - pipe");
-
-    pid_t pid = fork();
-    if (pid == -1)
-        handle_error_exit("[server] - fork");
-
-    if (pid == 0)
+    int check = get_logged_status();
+    if (check)
     {
-        // child
-        // redirects output to pipe and gives the command answer to the parent process
-        close(pipe_output[READ]);
-        dup2(pipe_output[WRITE], STDOUT_FILENO);
+        int status;
+        int pipe_output[2];
+        if ((pipe(pipe_output)) == -1)
+            handle_error_exit("[server] - pipe");
 
-        if (execl("/bin/bash", "/bin/bash", "-c", command, (char *)NULL) == -1)
-            handle_error_exit("[server] - exec error");
-        exit(10);
+        pid_t pid = fork();
+        if (pid == -1)
+            handle_error_exit("[server] - fork");
+
+        if (pid == 0)
+        {
+            // child
+            // redirects output to pipe and gives the command answer to the parent process
+            close(pipe_output[READ]);
+            dup2(pipe_output[WRITE], STDOUT_FILENO);
+
+            if (execl("/bin/bash", "/bin/bash", "-c", command, (char *)NULL) == -1)
+                handle_error_exit("[server] - exec error");
+            exit(10);
+        }
+        else
+        {
+            // parent
+            close(pipe_output[WRITE]);
+            waitpid(pid, &status, 0);
+            int n = read(pipe_output[READ], cmd_answer, sizeof(cmd_answer)); // reads answer from pipe
+            cmd_answer[n] = '\0';
+        }
+        return 1;
     }
     else
     {
-        // parent
-        close(pipe_output[WRITE]);
-        waitpid(pid, &status, 0);
-        int n = read(pipe_output[READ], cmd_answer, sizeof(cmd_answer)); // reads answer from pipe
-        cmd_answer[n] = '\0';
+        strcat(cmd_answer, "Not logged in - please login first");
+        return 0;
     }
-    return 1;
 }
 
 int shell_execution(char **args) // executes built in commands or launches system commands
 {
     if (args[0] == NULL) // empty command
         return 1;
-    int nr_commands = 3;
+    int nr_commands = 4;
     char *command_list[nr_commands];
     int val;
 
     command_list[0] = "cd";
     command_list[1] = "exit";
     command_list[2] = "login";
+    command_list[3] = "logout";
     for (int i = 0; i < nr_commands; i++)
     {
         if (strcmp(args[0], command_list[i]) == 0) // searching the command in the list
@@ -265,6 +258,8 @@ int shell_execution(char **args) // executes built in commands or launches syste
             strcat(cmd_answer, "Login unsuccessful");
             return 0;
         }
+    case 4:
+        return shell_logout();
     default:
         break;
     }
@@ -293,17 +288,7 @@ void shell_loop()
 {
     char **args;
     int status;
-    if (strstr(cmd_received, "cd") != NULL)
-    {
-        args = shell_split_line(cmd_received);
-        status = shell_execution(args);
-    }
-    else if (strstr(cmd_received, "exit") != NULL)
-    {
-        args = shell_split_line(cmd_received);
-        status = shell_execution(args);
-    }
-    else if (strstr(cmd_received, "login") != NULL)
+    if (strstr(cmd_received, "cd") != NULL || strstr(cmd_received, "exit") != NULL || strstr(cmd_received, "login") != NULL || strstr(cmd_received, "logout") != NULL)
     {
         args = shell_split_line(cmd_received);
         status = shell_execution(args);
@@ -356,13 +341,18 @@ int main()
         return 0;
     }
 
-    char *sql1; // table creation
+    char *sql1; // users table creation
     sql1 = "CREATE TABLE USERS("
            "USERNAME TEXT PRIMARY KEY NOT NULL, "
            "PASSWORD TEXT             NOT NULL, "
            "SALT     TEXT             NOT NULL);";
-    // execute
+
+    char *sql2; // used to keep track of clients and in which one there is someone logged in
+    sql2 = "CREATE TABLE LOGIN("
+           "PID           INT PRIMARY KEY NOT NULL, "
+           "LOGGED_STATUS INT             NOT NULL);";
     dbproject = sqlite3_exec(db, sql1, NULL, 0, &zErrMsg);
+    dbproject = sqlite3_exec(db, sql2, NULL, 0, &zErrMsg);
 
     SSL_library_init();
     ctx = InitServerCTX();                             // initialize SSL
@@ -391,13 +381,18 @@ int main()
                 ERR_print_errors_fp(stderr);
             else
             {
-                printf("New client connected \n");
-                while (1)
-                {
-                    SSL_read(ssl, cmd_received, MAX_COMMAND);
-                    cmd_received[sizeof(cmd_received)] = '\0';
-                    shell_loop();
-                }
+                printf("New client connected \n"); // insert client pid in database
+                int pid = getpid();
+                int check = insert_client(pid);
+                if (check)
+                    while (1)
+                    {
+                        SSL_read(ssl, cmd_received, MAX_COMMAND);
+                        cmd_received[sizeof(cmd_received)] = '\0';
+                        shell_loop();
+                    }
+                else
+                    SSL_write(ssl, "Some error occured", 19);
             }
             int sd;
             sd = SSL_get_fd(ssl); // get socket connection

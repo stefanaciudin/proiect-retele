@@ -7,6 +7,9 @@
 
 #include "database_functions.h"
 #include "functions.h"
+#include "server.h"
+
+
 
 int get_logged_status() // gets the logged status of the current client
 {
@@ -15,8 +18,7 @@ int get_logged_status() // gets the logged status of the current client
     sqlite3_stmt *stmt;
 
     int pid = getpid();
-
-    rc = sqlite3_open("projectdb.db", &db);
+    rc = sqlite3_open(path, &db);
     if (rc != SQLITE_OK)
     {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
@@ -53,8 +55,7 @@ int update_logged_status()
     sqlite3_stmt *stmt;
 
     int pid = getpid();
-
-    rc = sqlite3_open("projectdb.db", &db);
+    rc = sqlite3_open(path, &db);
     if (rc != SQLITE_OK)
     {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
@@ -107,8 +108,7 @@ int create_account(char *username, char *password) // creates account and insert
 
     char *salt = generate_salt();
     char *hash = crypt(password, salt);
-
-    rc = sqlite3_open("projectdb.db", &db);
+    rc = sqlite3_open(path, &db);
     if (rc)
     {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
@@ -161,7 +161,7 @@ int insert_client(int pid)
     sqlite3_stmt *stmt;
     int rc;
     int is_logged = 0;
-    rc = sqlite3_open("projectdb.db", &db);
+    rc = sqlite3_open(path, &db);
     if (rc)
     {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));

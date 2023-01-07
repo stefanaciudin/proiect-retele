@@ -7,6 +7,8 @@
 #include <errno.h>
 
 #include "functions.h"
+#include "server.h"
+
 
 char *generate_salt()
 {
@@ -106,4 +108,18 @@ SSL_CTX *InitServerCTX(void)
         abort();
     }
     return ctx;
+}
+
+char *get_path()
+{
+    char *to_return = malloc(sizeof(char) * 500);
+    char path[500];
+    int len = 500;
+    if (readlink("/proc/self/exe", path, len) != -1)
+    {
+        dirname(path);
+        strcat(path, "/projectdb.db");
+    }
+    strcpy(to_return, path);
+    return to_return;
 }

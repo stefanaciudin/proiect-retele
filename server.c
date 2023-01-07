@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <libgen.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <wait.h>
@@ -17,6 +18,7 @@
 #include "functions.h"
 #include "database_functions.h"
 #include "errors.h"
+#include "server.h"
 
 char *zErrMsg;
 int dbproject;
@@ -26,6 +28,8 @@ char cmd_answer[MAX_ANSWER];    // stores the answer
 
 int client;
 SSL *ssl;
+
+char *path;
 
 int shell_exit() // returns -1 to terminate execution
 {
@@ -106,7 +110,7 @@ int shell_login()
         SSL_read(ssl, password, 40);
         sqlite3_stmt *stmt;
         int rc;
-        rc = sqlite3_open("projectdb.db", &db);
+        rc = sqlite3_open(path, &db);
 
         rc = sqlite3_prepare_v2(db, "SELECT password,salt FROM users WHERE username = ?", -1, &stmt, 0);
         if (rc)
@@ -333,7 +337,6 @@ int main()
     SSL_CTX *ctx;
     int server;
     sqlite3 *db;
-
     dbproject = sqlite3_open("projectdb.db", &db);
     if (dbproject != SQLITE_OK)
     {
@@ -353,6 +356,8 @@ int main()
            "LOGGED_STATUS INT             NOT NULL);";
     dbproject = sqlite3_exec(db, sql1, NULL, 0, &zErrMsg);
     dbproject = sqlite3_exec(db, sql2, NULL, 0, &zErrMsg);
+
+    path=get_path();
 
     SSL_library_init();
     ctx = InitServerCTX();                             // initialize SSL

@@ -4,7 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
+#include <libgen.h>
+
 #include "errors.h"
+#include "server.h"
 
 #define PORT 2424
 
@@ -18,6 +22,8 @@
 #define DELIM " \n"
 
 #define SALT_LENGTH 20
+
+char *get_path(); // gets the path of the db file
 
 char *generate_salt(); // generates salt for crypt() in server
 SSL_CTX *InitServerCTX(void);

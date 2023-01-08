@@ -9,7 +9,6 @@
 #include "functions.h"
 #include "server.h"
 
-
 char *generate_salt()
 {
     char *salt = malloc(SALT_LENGTH + 1);

@@ -9,8 +9,6 @@
 #include "functions.h"
 #include "server.h"
 
-
-
 int get_logged_status() // gets the logged status of the current client
 {
     sqlite3 *db;
@@ -24,10 +22,11 @@ int get_logged_status() // gets the logged status of the current client
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
         return 0;
     }
+
     rc = sqlite3_prepare_v2(db, "SELECT logged_status FROM login WHERE pid = ?", -1, &stmt, 0);
     if (rc)
     {
-        fprintf(stderr, "Can't prepare SELECT statement: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
+        fprintf(stderr, "Can't prepare SELECT statement get-logged: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
         return 0;
     }
 
@@ -45,6 +44,8 @@ int get_logged_status() // gets the logged status of the current client
         sqlite3_close(db);
         return stored_logged_status;
     }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
     return 0;
 }
 

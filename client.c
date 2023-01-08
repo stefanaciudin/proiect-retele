@@ -13,8 +13,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#include "functions.h"
-#include "errors.h"
+#include "src/functions.h"
+#include "src/errors.h"
 
 #define PORT 2424
 
@@ -59,7 +59,7 @@ int main()
         ERR_print_errors_fp(stderr);
     else
     {
-        // ShowCerts(ssl);                        // print certificates
+        ShowCerts(ssl);                        // print certificates
         while (strcmp("exit\n", command) != 0) // exit stops the execution
         {
             n = read(0, command, MAX_COMMAND); // reading the command

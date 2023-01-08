@@ -15,10 +15,10 @@
 
 #include <crypt.h>
 
-#include "functions.h"
-#include "database_functions.h"
-#include "errors.h"
-#include "server.h"
+#include "src/functions.h"
+#include "src/database_functions.h"
+#include "src/errors.h"
+#include "src/server.h"
 
 char *zErrMsg;
 int dbproject;
@@ -34,6 +34,7 @@ char *path;
 int shell_exit() // returns -1 to terminate execution
 {
     printf("Client disconnected\n");
+    strcat(cmd_answer, "Disconnected\n");
     return -1;
 }
 int shell_logout()
@@ -41,7 +42,7 @@ int shell_logout()
     int check = get_logged_status();
     if (!check)
         strcat(cmd_answer, "Not logged in");
-    if (check)
+    else
     {
         int ok;
         ok = update_logged_status();
@@ -62,8 +63,7 @@ void current_directory()
 
 int shell_cd(char **args) // implementation of cd
 {
-    // login - cd - other command ?????
-    int check = get_logged_status(); // here
+    int check = get_logged_status();
     if (check)
     {
         if (args[1] == NULL)
@@ -85,7 +85,7 @@ int shell_cd(char **args) // implementation of cd
     }
     else
     {
-        SSL_write(ssl, "Not logged in - please login first", 35);
+        strcat(cmd_answer, "Not logged in - please login first");
         return 0;
     }
 }
@@ -103,19 +103,19 @@ int shell_login()
         char username[30], password[40];
         bzero(username, 30);
         bzero(password, 40);
-        sqlite3 *db;
         SSL_write(ssl, "Username: ", 11);
         SSL_read(ssl, username, 30);
         SSL_write(ssl, "Password: ", 11);
         SSL_read(ssl, password, 40);
         sqlite3_stmt *stmt;
         int rc;
+        sqlite3 *db;
         rc = sqlite3_open(path, &db);
 
         rc = sqlite3_prepare_v2(db, "SELECT password,salt FROM users WHERE username = ?", -1, &stmt, 0);
         if (rc)
         {
-            fprintf(stderr, "Can't prepare SELECT statement: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
+            fprintf(stderr, "Can't prepare SELECT statement server: %s %d\n", sqlite3_errmsg(db), sqlite3_extended_errcode(db));
             return 0;
         }
 
@@ -132,7 +132,7 @@ int shell_login()
             char *stored_hash = (char *)sqlite3_column_text(stmt, 0);
             char *salt = (char *)sqlite3_column_text(stmt, 1);
             char *inputted_hash = crypt(password, salt);
-            if (strcmp(inputted_hash, stored_hash) == 0)
+            if (strcmp(inputted_hash, stored_hash) == 0) // compare the input with the stored password
             {
 
                 sqlite3_finalize(stmt);
@@ -227,8 +227,6 @@ int shell_launch(char *command) // executes system commands
 
 int shell_execution(char **args) // executes built in commands or launches system commands
 {
-    if (args[0] == NULL) // empty command
-        return 1;
     int nr_commands = 4;
     char *command_list[nr_commands];
     int val;
@@ -297,7 +295,7 @@ void shell_loop()
         args = shell_split_line(cmd_received);
         status = shell_execution(args);
     }
-    else
+    else if (cmd_received[0] != '\000') // if the command isnt empty
         status = shell_launch(cmd_received);
     SSL_write(ssl, cmd_answer, sizeof(cmd_answer));
     bzero(cmd_answer, sizeof(cmd_answer));
@@ -357,8 +355,7 @@ int main()
     dbproject = sqlite3_exec(db, sql1, NULL, 0, &zErrMsg);
     dbproject = sqlite3_exec(db, sql2, NULL, 0, &zErrMsg);
 
-    path=get_path();
-
+    path = get_path();
     SSL_library_init();
     ctx = InitServerCTX();                             // initialize SSL
     LoadCertificates(ctx, "mycert.pem", "mycert.pem"); // load certs - by default file names are both "mycert.pem"
@@ -387,6 +384,7 @@ int main()
             else
             {
                 printf("New client connected \n"); // insert client pid in database
+                sqlite3_close(db);
                 int pid = getpid();
                 int check = insert_client(pid);
                 if (check)
@@ -394,6 +392,7 @@ int main()
                     {
                         SSL_read(ssl, cmd_received, MAX_COMMAND);
                         cmd_received[sizeof(cmd_received)] = '\0';
+                        sqlite3_close(db);
                         shell_loop();
                     }
                 else
@@ -405,5 +404,6 @@ int main()
             close(sd);            // close connection
         }
     }
+    sqlite3_close(db);
     close(client);
 }

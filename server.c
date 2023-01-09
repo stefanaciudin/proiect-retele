@@ -323,6 +323,14 @@ int open_listener(int port)
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons(PORT);
+
+    int yes = 1;
+    if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1)
+    {
+        close(sd);
+        handle_error_exit("[server] - socket option");
+    }
+
     if (bind(sd, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
         handle_error_exit("[server] - bind");
     if (listen(sd, 5) == -1)
@@ -360,6 +368,7 @@ int main()
     ctx = InitServerCTX();                             // initialize SSL
     LoadCertificates(ctx, "mycert.pem", "mycert.pem"); // load certs - by default file names are both "mycert.pem"
     server = open_listener(PORT);
+
     struct sockaddr_in from;
     bzero(&from, sizeof(from));
 

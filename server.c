@@ -349,7 +349,6 @@ int main()
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
         return 0;
     }
-
     char *sql1; // users table creation
     sql1 = "CREATE TABLE USERS("
            "USERNAME TEXT PRIMARY KEY NOT NULL, "

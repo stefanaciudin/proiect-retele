@@ -363,6 +363,8 @@ int main()
     struct sockaddr_in from;
     bzero(&from, sizeof(from));
 
+    printf("Listening at port 2424\n");
+
     int run = 1;
 
     while (run)
@@ -385,8 +387,8 @@ int main()
             {
                 printf("New client connected \n"); // insert client pid in database
                 sqlite3_close(db);
-                int pid = getpid();
-                int check = insert_client(pid);
+                pid_t pid_insert = getpid();
+                int check = insert_client(pid_insert);
                 if (check)
                     while (1)
                     {
